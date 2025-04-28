@@ -12,4 +12,8 @@ services:
       - key: NAVER_CLIENT_ID
         sync: false
       - key: NAVER_CLIENT_SECRET
-        sync: false 
+        sync: false
+      - key: SPREADSHEET_ID
+        value: 1IgpwLo4P9ISt43ZOzkiz6YedWSL0Yh3LZpwmSzmp3u0
+    healthCheckPath: /
+    autoDeploy: true 
