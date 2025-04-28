@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 import re
 import pandas as pd
 from google.oauth2 import service_account
+import json
 
 load_dotenv()
 
@@ -29,30 +30,34 @@ NAVER_CLIENT_ID = os.getenv('NAVER_CLIENT_ID', 'xfwEXaagnGe2G_5Mquhb')
 NAVER_CLIENT_SECRET = os.getenv('NAVER_CLIENT_SECRET', 'XEsKiDLtUC')
 
 def get_google_sheets_service():
-    creds = None
-    
-    # 환경 변수에서 서비스 계정 키 정보 가져오기
-    service_account_info = {
-        "type": "service_account",
-        "project_id": os.getenv('GOOGLE_PROJECT_ID'),
-        "private_key_id": os.getenv('GOOGLE_PRIVATE_KEY_ID'),
-        "private_key": os.getenv('GOOGLE_PRIVATE_KEY').replace('\\n', '\n'),
-        "client_email": os.getenv('GOOGLE_CLIENT_EMAIL'),
-        "client_id": os.getenv('GOOGLE_CLIENT_ID'),
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": os.getenv('GOOGLE_CLIENT_X509_CERT_URL')
-    }
-    
     try:
+        # 환경 변수에서 서비스 계정 키 정보 가져오기
+        service_account_info = {
+            "type": "service_account",
+            "project_id": os.getenv('GOOGLE_PROJECT_ID'),
+            "private_key_id": os.getenv('GOOGLE_PRIVATE_KEY_ID'),
+            "private_key": os.getenv('GOOGLE_PRIVATE_KEY', '').replace('\\n', '\n'),
+            "client_email": os.getenv('GOOGLE_CLIENT_EMAIL'),
+            "client_id": os.getenv('GOOGLE_CLIENT_ID'),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": os.getenv('GOOGLE_CLIENT_X509_CERT_URL')
+        }
+        
+        # 필수 필드 확인
+        required_fields = ['project_id', 'private_key_id', 'private_key', 'client_email']
+        for field in required_fields:
+            if not service_account_info.get(field):
+                raise ValueError(f"Missing required field: {field}")
+        
         creds = service_account.Credentials.from_service_account_info(
             service_account_info, scopes=SCOPES)
+        
+        return build('sheets', 'v4', credentials=creds)
     except Exception as e:
-        print(f"Error creating credentials: {str(e)}")
+        print(f"Google Sheets 서비스 초기화 중 오류 발생: {str(e)}")
         return None
-
-    return build('sheets', 'v4', credentials=creds)
 
 def get_corporations(service):
     result = service.spreadsheets().values().get(
