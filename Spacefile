@@ -1,0 +1,9 @@
+v: 0
+micros:
+  - name: portfolio-news
+    src: .
+    engine: python3.9
+    primary: true
+    public: true
+    run: gunicorn app:app
+    dev: python app.py 
