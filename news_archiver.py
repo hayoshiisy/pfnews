@@ -31,32 +31,83 @@ NAVER_CLIENT_SECRET = os.getenv('NAVER_CLIENT_SECRET', 'XEsKiDLtUC')
 
 def get_google_sheets_service():
     try:
-        # 환경 변수에서 서비스 계정 키 정보 가져오기
+        print("\n=== 환경 변수 확인 ===")
+        env_vars = {
+            'GOOGLE_PROJECT_ID': os.getenv('GOOGLE_PROJECT_ID'),
+            'GOOGLE_PRIVATE_KEY_ID': os.getenv('GOOGLE_PRIVATE_KEY_ID'),
+            'GOOGLE_PRIVATE_KEY': os.getenv('GOOGLE_PRIVATE_KEY'),
+            'GOOGLE_CLIENT_EMAIL': os.getenv('GOOGLE_CLIENT_EMAIL'),
+            'GOOGLE_CLIENT_ID': os.getenv('GOOGLE_CLIENT_ID'),
+            'GOOGLE_CLIENT_X509_CERT_URL': os.getenv('GOOGLE_CLIENT_X509_CERT_URL'),
+            'SPREADSHEET_ID': os.getenv('SPREADSHEET_ID')
+        }
+        
+        # 환경 변수 검증
+        for key, value in env_vars.items():
+            if not value:
+                print(f"\n{key}:")
+                print("- 설정되지 않음")
+                return None
+        
+        # 서비스 계정 정보 구성
         service_account_info = {
             "type": "service_account",
-            "project_id": os.getenv('GOOGLE_PROJECT_ID'),
-            "private_key_id": os.getenv('GOOGLE_PRIVATE_KEY_ID'),
-            "private_key": os.getenv('GOOGLE_PRIVATE_KEY', '').replace('\\n', '\n'),
-            "client_email": os.getenv('GOOGLE_CLIENT_EMAIL'),
-            "client_id": os.getenv('GOOGLE_CLIENT_ID'),
+            "project_id": env_vars['GOOGLE_PROJECT_ID'],
+            "private_key_id": env_vars['GOOGLE_PRIVATE_KEY_ID'],
+            "private_key": env_vars['GOOGLE_PRIVATE_KEY'].replace('\\n', '\n'),
+            "client_email": env_vars['GOOGLE_CLIENT_EMAIL'],
+            "client_id": env_vars['GOOGLE_CLIENT_ID'],
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
             "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": os.getenv('GOOGLE_CLIENT_X509_CERT_URL')
+            "client_x509_cert_url": env_vars['GOOGLE_CLIENT_X509_CERT_URL']
         }
         
-        # 필수 필드 확인
-        required_fields = ['project_id', 'private_key_id', 'private_key', 'client_email']
-        for field in required_fields:
-            if not service_account_info.get(field):
-                raise ValueError(f"Missing required field: {field}")
+        # 임시 JSON 파일 생성
+        import tempfile
+        import json
         
-        creds = service_account.Credentials.from_service_account_info(
-            service_account_info, scopes=SCOPES)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as temp_file:
+            json.dump(service_account_info, temp_file, indent=2)
+            temp_file_path = temp_file.name
         
-        return build('sheets', 'v4', credentials=creds)
+        print(f"\n=== 서비스 계정 키 파일 생성 ===")
+        print(f"임시 파일 경로: {temp_file_path}")
+        
+        try:
+            # 서비스 계정 키 파일을 사용하여 인증
+            creds = service_account.Credentials.from_service_account_file(
+                temp_file_path, scopes=SCOPES)
+            
+            service = build('sheets', 'v4', credentials=creds)
+            print("Google Sheets 서비스 초기화 성공")
+            
+            # 임시 파일 삭제
+            os.unlink(temp_file_path)
+            return service
+            
+        except Exception as e:
+            print(f"\n=== 인증 오류 발생 ===")
+            print(f"오류 메시지: {str(e)}")
+            print(f"오류 유형: {type(e).__name__}")
+            import traceback
+            print("상세 오류 정보:")
+            print(traceback.format_exc())
+            
+            # 임시 파일 삭제 시도
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+            return None
+            
     except Exception as e:
-        print(f"Google Sheets 서비스 초기화 중 오류 발생: {str(e)}")
+        print(f"\n=== 일반 오류 발생 ===")
+        print(f"오류 메시지: {str(e)}")
+        print(f"오류 유형: {type(e).__name__}")
+        import traceback
+        print("상세 오류 정보:")
+        print(traceback.format_exc())
         return None
 
 def get_corporations(service):
