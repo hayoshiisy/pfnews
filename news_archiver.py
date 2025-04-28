@@ -32,14 +32,21 @@ NAVER_CLIENT_SECRET = os.getenv('NAVER_CLIENT_SECRET', 'XEsKiDLtUC')
 def get_google_sheets_service():
     try:
         print("\n=== 환경 변수 확인 ===")
+        
+        # GOOGLE_PRIVATE_KEY 특별 처리
+        private_key = os.getenv('GOOGLE_PRIVATE_KEY', '')
+        if private_key:
+            # 리터럴 문자열 \n을 실제 줄바꿈으로 변환
+            private_key = private_key.replace('\\n', '\n')
+        
         env_vars = {
-            'GOOGLE_PROJECT_ID': os.getenv('GOOGLE_PROJECT_ID'),
-            'GOOGLE_PRIVATE_KEY_ID': os.getenv('GOOGLE_PRIVATE_KEY_ID'),
-            'GOOGLE_PRIVATE_KEY': os.getenv('GOOGLE_PRIVATE_KEY'),
-            'GOOGLE_CLIENT_EMAIL': os.getenv('GOOGLE_CLIENT_EMAIL'),
-            'GOOGLE_CLIENT_ID': os.getenv('GOOGLE_CLIENT_ID'),
-            'GOOGLE_CLIENT_X509_CERT_URL': os.getenv('GOOGLE_CLIENT_X509_CERT_URL'),
-            'SPREADSHEET_ID': os.getenv('SPREADSHEET_ID')
+            'GOOGLE_PROJECT_ID': os.getenv('GOOGLE_PROJECT_ID', '').strip('"'),
+            'GOOGLE_PRIVATE_KEY_ID': os.getenv('GOOGLE_PRIVATE_KEY_ID', '').strip('"'),
+            'GOOGLE_PRIVATE_KEY': private_key,
+            'GOOGLE_CLIENT_EMAIL': os.getenv('GOOGLE_CLIENT_EMAIL', '').strip('"'),
+            'GOOGLE_CLIENT_ID': os.getenv('GOOGLE_CLIENT_ID', '').strip('"'),
+            'GOOGLE_CLIENT_X509_CERT_URL': os.getenv('GOOGLE_CLIENT_X509_CERT_URL', '').strip('"'),
+            'SPREADSHEET_ID': os.getenv('SPREADSHEET_ID', '').strip('"')
         }
         
         # 환경 변수 검증 및 출력
@@ -55,11 +62,7 @@ def get_google_sheets_service():
                 if key == 'GOOGLE_PRIVATE_KEY':
                     print(f"- 시작 부분: {value[:50]}")
                     print(f"- 끝 부분: {value[-50:]}")
-                    # private key 형식 검증
-                    if not value.startswith('-----BEGIN PRIVATE KEY-----'):
-                        print("- 경고: private key가 올바른 형식이 아닙니다.")
-                        value = f"-----BEGIN PRIVATE KEY-----\n{value}\n-----END PRIVATE KEY-----"
-                        print("- private key 형식을 수정했습니다.")
+                    print(f"- 줄바꿈 수: {value.count('\n')}")
                 else:
                     print(f"- 값: {value}")
         
