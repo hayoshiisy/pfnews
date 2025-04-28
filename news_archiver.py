@@ -42,19 +42,33 @@ def get_google_sheets_service():
             'SPREADSHEET_ID': os.getenv('SPREADSHEET_ID')
         }
         
-        # 환경 변수 검증
+        # 환경 변수 검증 및 출력
         for key, value in env_vars.items():
             if not value:
                 print(f"\n{key}:")
                 print("- 설정되지 않음")
                 return None
+            else:
+                print(f"\n{key}:")
+                print(f"- 설정됨: 예")
+                print(f"- 길이: {len(value)}")
+                if key == 'GOOGLE_PRIVATE_KEY':
+                    print(f"- 시작 부분: {value[:50]}")
+                    print(f"- 끝 부분: {value[-50:]}")
+                    # private key 형식 검증
+                    if not value.startswith('-----BEGIN PRIVATE KEY-----'):
+                        print("- 경고: private key가 올바른 형식이 아닙니다.")
+                        value = f"-----BEGIN PRIVATE KEY-----\n{value}\n-----END PRIVATE KEY-----"
+                        print("- private key 형식을 수정했습니다.")
+                else:
+                    print(f"- 값: {value}")
         
         # 서비스 계정 정보 구성
         service_account_info = {
             "type": "service_account",
             "project_id": env_vars['GOOGLE_PROJECT_ID'],
             "private_key_id": env_vars['GOOGLE_PRIVATE_KEY_ID'],
-            "private_key": env_vars['GOOGLE_PRIVATE_KEY'].replace('\\n', '\n'),
+            "private_key": env_vars['GOOGLE_PRIVATE_KEY'],
             "client_email": env_vars['GOOGLE_CLIENT_EMAIL'],
             "client_id": env_vars['GOOGLE_CLIENT_ID'],
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -63,43 +77,61 @@ def get_google_sheets_service():
             "client_x509_cert_url": env_vars['GOOGLE_CLIENT_X509_CERT_URL']
         }
         
-        # 임시 JSON 파일 생성
-        import tempfile
-        import json
+        print("\n=== 서비스 계정 정보 구성 ===")
+        debug_info = service_account_info.copy()
+        debug_info['private_key'] = '***HIDDEN***'
+        print(json.dumps(debug_info, indent=2, ensure_ascii=False))
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as temp_file:
-            json.dump(service_account_info, temp_file, indent=2)
-            temp_file_path = temp_file.name
-        
-        print(f"\n=== 서비스 계정 키 파일 생성 ===")
-        print(f"임시 파일 경로: {temp_file_path}")
-        
+        # 직접 인증 시도
         try:
-            # 서비스 계정 키 파일을 사용하여 인증
-            creds = service_account.Credentials.from_service_account_file(
-                temp_file_path, scopes=SCOPES)
+            print("\n=== 직접 인증 시도 ===")
+            creds = service_account.Credentials.from_service_account_info(
+                service_account_info, scopes=SCOPES)
             
             service = build('sheets', 'v4', credentials=creds)
             print("Google Sheets 서비스 초기화 성공")
-            
-            # 임시 파일 삭제
-            os.unlink(temp_file_path)
             return service
             
         except Exception as e:
-            print(f"\n=== 인증 오류 발생 ===")
+            print(f"\n=== 직접 인증 실패, 파일 기반 인증 시도 ===")
             print(f"오류 메시지: {str(e)}")
-            print(f"오류 유형: {type(e).__name__}")
-            import traceback
-            print("상세 오류 정보:")
-            print(traceback.format_exc())
             
-            # 임시 파일 삭제 시도
+            # 임시 JSON 파일 생성
+            import tempfile
+            
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as temp_file:
+                json.dump(service_account_info, temp_file, indent=2)
+                temp_file_path = temp_file.name
+            
+            print(f"\n=== 서비스 계정 키 파일 생성 ===")
+            print(f"임시 파일 경로: {temp_file_path}")
+            
             try:
+                # 서비스 계정 키 파일을 사용하여 인증
+                creds = service_account.Credentials.from_service_account_file(
+                    temp_file_path, scopes=SCOPES)
+                
+                service = build('sheets', 'v4', credentials=creds)
+                print("Google Sheets 서비스 초기화 성공")
+                
+                # 임시 파일 삭제
                 os.unlink(temp_file_path)
-            except:
-                pass
-            return None
+                return service
+                
+            except Exception as e:
+                print(f"\n=== 파일 기반 인증 실패 ===")
+                print(f"오류 메시지: {str(e)}")
+                print(f"오류 유형: {type(e).__name__}")
+                import traceback
+                print("상세 오류 정보:")
+                print(traceback.format_exc())
+                
+                # 임시 파일 삭제 시도
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+                return None
             
     except Exception as e:
         print(f"\n=== 일반 오류 발생 ===")
