@@ -38,6 +38,8 @@ def get_google_sheets_service():
         if private_key:
             # 리터럴 문자열 \n을 실제 줄바꿈으로 변환
             private_key = private_key.replace('\\n', '\n')
+            # 따옴표 제거
+            private_key = private_key.strip('"')
         
         env_vars = {
             'GOOGLE_PROJECT_ID': os.getenv('GOOGLE_PROJECT_ID', '').strip('"'),
