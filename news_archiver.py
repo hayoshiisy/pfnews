@@ -62,7 +62,8 @@ def get_google_sheets_service():
                 if key == 'GOOGLE_PRIVATE_KEY':
                     print(f"- 시작 부분: {value[:50]}")
                     print(f"- 끝 부분: {value[-50:]}")
-                    print(f"- 줄바꿈 수: {value.count('\n')}")
+                    newline_count = value.count(chr(10))
+                    print(f"- 줄바꿈 수: {newline_count}")
                 else:
                     print(f"- 값: {value}")
         
@@ -318,36 +319,53 @@ def search_naver_news(company_name, api_key, api_secret):
 def save_to_spreadsheet(articles, company_name):
     """수집된 기사를 스프레드시트에 저장합니다."""
     try:
-        # 스프레드시트 파일 경로
-        spreadsheet_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'news_data.xlsx')
-        
-        # 기존 파일이 있으면 읽어오기
-        if os.path.exists(spreadsheet_path):
-            df_existing = pd.read_excel(spreadsheet_path)
-        else:
-            df_existing = pd.DataFrame(columns=['company', 'title', 'content', 'link', 'pubDate'])
+        print(f"\n=== 저장 프로세스 디버깅 ===")
+        print(f"회사명: {company_name}")
+        print(f"초기 기사 수: {len(articles)}")
         
         # 새로운 데이터를 DataFrame으로 변환
         df_new = pd.DataFrame(articles)
-        df_new['company'] = company_name
         
-        # 기존 데이터와 새 데이터 병합
-        df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+        # 날짜순 정렬
+        df_new['pubDate'] = pd.to_datetime(df_new['pubDate']).dt.tz_localize(None)
+        df_new = df_new.sort_values('pubDate', ascending=False)
         
-        # 중복 제거 (제목 기준)
-        df_combined = df_combined.drop_duplicates(subset=['title'], keep='first')
+        # 날짜를 문자열로 변환 (YYYY-MM-DD 형식)
+        df_new['pubDate'] = df_new['pubDate'].dt.strftime('%Y-%m-%d')
         
-        # 날짜순 정렬 (타임존 제거)
-        df_combined['pubDate'] = pd.to_datetime(df_combined['pubDate']).dt.tz_localize(None)
-        df_combined = df_combined.sort_values('pubDate', ascending=False)
+        # 중복 제거 (제목과 회사명 기준)
+        df_new = df_new.drop_duplicates(subset=['title', 'company'], keep='first')
+        print(f"중복 제거 후 데이터 수: {len(df_new)}")
         
-        # Excel 파일로 저장
-        df_combined.to_excel(spreadsheet_path, index=False)
-        print(f"\n총 {len(articles)}개의 기사를 스프레드시트에 저장합니다...")
-        print("저장 완료!")
+        # Google Sheets에 저장
+        service = get_google_sheets_service()
+        if service:
+            # 데이터를 2D 리스트로 변환
+            values = df_new[['pubDate', 'company', 'title', 'link', 'content']].values.tolist()
+            
+            # 기존 데이터 지우기
+            service.spreadsheets().values().clear(
+                spreadsheetId=SPREADSHEET_ID,
+                range='법인 PR!A2:E'
+            ).execute()
+            
+            # 새 데이터 쓰기
+            body = {
+                'values': values
+            }
+            service.spreadsheets().values().update(
+                spreadsheetId=SPREADSHEET_ID,
+                range='법인 PR!A2',
+                valueInputOption='RAW',
+                body=body
+            ).execute()
+            
+            print(f"최종 저장된 데이터 수: {len(values)}")
         
     except Exception as e:
         print(f"Error saving to spreadsheet: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
 
 def get_news_data():
     """
@@ -394,15 +412,9 @@ def main():
     print("Google Sheets 서비스 초기화 중...")
     service = get_google_sheets_service()
     
-    # 중복 제거 실행
-    remove_duplicates(service)
-    
     print("\n법인 목록 가져오는 중...")
     corporations = get_corporations(service)
     print(f"{len(corporations)}개 법인 발견")
-    
-    # 기존 URL 목록 가져오기
-    existing_urls = get_existing_urls(service)
     
     all_news_items = []
     for company in corporations:
@@ -410,13 +422,17 @@ def main():
         news_items = search_naver_news(company, NAVER_CLIENT_ID, NAVER_CLIENT_SECRET)
         if news_items:
             print(f"{len(news_items)}개의 기사를 찾았습니다.")
+            # 각 기사의 회사명 추가
+            for item in news_items:
+                item['company'] = company
             all_news_items.extend(news_items)
+            print(f"누적 기사 수: {len(all_news_items)}")
         else:
             print("유효한 기사를 찾지 못했습니다.")
     
     if all_news_items:
-        print(f"\n총 {len(all_news_items)}개의 기사를 스프레드시트에 저장합니다...")
-        save_to_spreadsheet(all_news_items, company)
+        print(f"\n총 {len(all_news_items)}개의 기사 중 중복 제거 시작...")
+        save_to_spreadsheet(all_news_items, "all")
         print("저장 완료!")
 
 if __name__ == '__main__':
